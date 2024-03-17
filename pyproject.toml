@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "quectel-modem"
+version = "0.9"
+description = "Python package to manage Quectel modems"
+authors = ["laurent <laurent.carre@sterwen-technology.eu>"]
+license = "Eclipse Public Licence 2.0"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.7"
+pyserial = "^3.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
