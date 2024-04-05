@@ -9,9 +9,18 @@
 # Licence:     Eclipse Public License 2.0
 # -------------------------------------------------------------------------------
 
+import sys
+from argparse import ArgumentParser
+
 from quectel_at_lib import *
 
 log = logging.getLogger('Modem_GPS_Service')
+
+
+def _parser():
+    p = ArgumentParser(description=sys.argv[0])
+    p.add_argument('-R', '--reset', action='store_true')
+    p.add_argument('-gps', '--gps', )
 
 
 def checkSMS(modem):

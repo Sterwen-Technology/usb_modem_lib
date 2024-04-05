@@ -74,6 +74,11 @@ def findUsbModem(mfg):
     '''
     Look on the USB system and detect the modem from the manufacturer
     '''
+    if not sys.platform.startswith('linux'):
+        raise ModemException("Modem USB interface search only on Linux")
+    if os.geteuid() != 0:
+        raise ModemException("Must be root to search for modem")
+
     modem_data = {'manufacturer': mfg}
     r = subprocess.run('lsusb', capture_output=True)
     lines = r.stdout.decode('utf-8').split('\n')
@@ -180,6 +185,9 @@ class QuectelModem:
         self._rev = None
         self._IMEI = None
         self._ICCID = None
+        self._lac = 0
+        self._ci = 0
+
         if init:
             self.initialize()
         self._operatorNames = None  # dictionary PLMN/Operator name
@@ -191,7 +199,7 @@ class QuectelModem:
             self._tty = serial.Serial(self._ifname, timeout=10.0)
         except serial.SerialException as err:
             # print "Opening:",ifName," :",err
-            raise ModemException("Open modem:" + self._ifname + " error:" + str(err))
+            raise ModemException(f"Open modem AT interface:{self._ifname} error:{err}")
         return
 
     def close(self):
@@ -231,10 +239,10 @@ class QuectelModem:
             raise ModemException(err)
 
     def readATResponse(self, param, raiseException):
-        readResp = True
-        nbResp = 0
-        respList = []
-        while readResp:
+        read_resp = True
+        nb_resp = 0
+        resp_list = []
+        while read_resp:
             # reading one response
             # self._tty.timeout=10.0
             try:
@@ -243,34 +251,34 @@ class QuectelModem:
                 modem_log.error("Read at Command Error:" + str(err))
                 if self._logAT:
                     self._logfp.write(str(err) + "\n")
-                readResp = False
+                read_resp = False
                 break
             if self._logAT:
                 self._logfp.write(resp)
-            cleanResp = resp.strip('\n\r')
+            clean_resp = resp.strip('\n\r')
             # analysis of the response
-            if cleanResp == "OK":
-                readResp = False
-            elif cleanResp == "ERROR":
-                readResp = False
+            if clean_resp == "OK":
+                read_resp = False
+            elif clean_resp == "ERROR":
+                read_resp = False
                 if raiseException:
                     raise ModemException(param + " ERROR")
-            elif cleanResp == "NO CARRIER":
-                readResp = False
+            elif clean_resp == "NO CARRIER":
+                read_resp = False
                 if raiseException:
                     raise ModemException(param + " NO CARRIER")
-            elif cleanResp.startswith("+CME") or cleanResp.startswith("+CMS"):
-                readResp = False
-                modem_log.debug(cleanResp)
-                respList.append(cleanResp)
+            elif clean_resp.startswith("+CME") or clean_resp.startswith("+CMS"):
+                read_resp = False
+                modem_log.debug(clean_resp)
+                resp_list.append(clean_resp)
                 if raiseException:
-                    raise ModemException(cleanResp)
+                    raise ModemException(clean_resp)
             else:
-                if len(cleanResp) > 0:
-                    respList.append(cleanResp)
-                    nbResp = nbResp + 1
+                if len(clean_resp) > 0:
+                    resp_list.append(clean_resp)
+                    nb_resp = nb_resp + 1
         # print "Number of responses:",nbResp
-        return respList
+        return resp_list
 
     def sendATcommand(self, param=None, raiseException=False):
         buf = "AT"
@@ -440,7 +448,7 @@ class QuectelModem:
         '''
         for r in resp:
             param = self.splitResponse(cmd, r, False)
-            if param != None:
+            if param is not None:
                 return param
             else:
                 modem_log.debug("AT cmd=" + cmd + "response:" + str(r))
@@ -957,4 +965,4 @@ class QuectelModem:
         msgs = self.readSMS('ALL')
         if delete:
             self.sendATcommand('+CMGD=1,1')
-        return msgs
+        return ms
