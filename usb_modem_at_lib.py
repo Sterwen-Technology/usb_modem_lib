@@ -53,6 +53,7 @@ class UsbTty:
             return s_str[start_value: end_value], end_value
 
         c_start = 0
+        # print(serial_definition)
         for s_key in self.keys:
             try:
                 val, c_start = extract_key_value(serial_definition, s_key, c_start)
@@ -70,7 +71,7 @@ class UsbTty:
         return self._tty_name
 
 
-def findUsbModem(mfg):
+def findUsbModem(mfg, verbose: bool = False):
     '''
     Look on the USB system and detect the modem from the manufacturer
     '''
@@ -109,7 +110,8 @@ def findUsbModem(mfg):
                 continue
             tty = UsbTty(line)
             if tty.match('vendor', ids[0]) and tty.match('product', ids[1]):
-                print(f"found tty {tty.tty_name}")
+                if verbose:
+                    print(f"found tty {tty.tty_name}")
                 tty_list.append(tty)
         modem_data['tty_list'] = tty_list
         return modem_data
@@ -123,7 +125,7 @@ class QuectelModem:
     default_dir = "/data/solidsense/modem_gps"
 
     @staticmethod
-    def checkModemPresence(save_modem=False):
+    def checkModemPresence(save_modem=False, verbose=False):
         '''
         Check the physical presence of the modem
         raise ModemException when no modem is found
@@ -132,10 +134,10 @@ class QuectelModem:
 
         '''
         # print("User ID=", os.geteuid())
-        modem_def = findUsbModem('Quectel')
+        modem_def = findUsbModem('Quectel', verbose)
         if save_modem:
             if modem_def.get('tty_list') is None:
-                modem_log.error("Cannot save Modem characteristic")
+                modem_log.error("Incorrect Modem characteristic detection")
                 return
             if os.path.exists(QuectelModem.default_dir):
                 modem_file = os.path.join(QuectelModem.default_dir, 'modem0.json')
@@ -147,11 +149,16 @@ class QuectelModem:
                 'AT_CMD': modem_def['tty_list'][2].tty_name
             }
             data = json.dumps(modem_save, indent=1)
-            with open(modem_file, 'w') as fd:
-                # fd.write("# File generated automatically do not modify \n")
-                # fd.write("# to make that file actual run Test_Modem.py as sudo\n\n")
-                fd.write(data)
-                fd.write("\n")
+            try:
+                with open(modem_file, 'w') as fd:
+                    # fd.write("# File generated automatically do not modify \n")
+                    # fd.write("# to make that file actual run Test_Modem.py as sudo\n\n")
+                    fd.write(data)
+                    fd.write("\n")
+            except OSError as err:
+                modem_log.error(f"Cannot save modem file {modem_file}: {err}")
+                raise
+        return modem_def
 
     def __init__(self, if_num=0, log=False, init=True):
 
@@ -159,11 +166,19 @@ class QuectelModem:
             filepath = self.default_dir
         else:
             filepath = os.getenv("HOME")
-        tty_file = os.path.join(filepath, f'modem{if_num}.json')
-        with open(tty_file, 'r') as fd:
-            modem_def = json.load(fd)
-            self._ifname = modem_def['AT_CMD']
-            self._nmea_tty = modem_def['NMEA']
+        self._def_file = os.path.join(filepath, f'modem{if_num}.json')
+        self._if_num = if_num
+        try:
+            with open(self._def_file, 'r') as fd:
+                self._modem_def = json.load(fd)
+                self._ifname = self._modem_def['AT_CMD']
+                self._nmea_tty = self._modem_def['NMEA']
+                self._pin_code = self._modem_def.get('PIN', None)
+                self._stored_imsi = self._modem_def.get('IMSI', None)
+        except (OSError, json.JSONDecodeError) as err:
+            modem_log.error(f"Failed to read modem{if_num} definition file {tty_file}:{err} => please run --detect option")
+            raise
+
         self._tty = None
         self.open()
         self._logAT = log
@@ -220,6 +235,19 @@ class QuectelModem:
             buf = datetime.datetime.now().strftime("%H:%M:%S.%f >")
             buf += cmd
             self._logfp.write(buf)
+
+    def _store_def(self):
+        if self._pin_code is not None:
+            self._modem_def['PIN'] = self._pin_code
+        if self._IMSI is not None:
+            self._modem_def['IMSI'] = self._IMSI
+        modem_log.debug("Storing modem definition %s" % self._modem_def)
+        try:
+            with open(self._def_file, 'w') as fd:
+                json.dump(self._modem_def, fd)
+        except OSError as err:
+            modem_log.error(f"Failed to write modem{self._if_num} definition file {self._def_file}:{err}")
+            raise
 
     #
     # send AT command and return the responses
@@ -294,18 +322,19 @@ class QuectelModem:
     def initialize(self):
         self.sendATcommand("E0")  # remove echo
         r = self.sendATcommand("I")
-        if r[0] != "Quectel":
+        if r[0] != self.manufacturer():
             # print "Wrong manufacturer:",r
             raise ModemException("Wrong manufacturer:" + str(r))
 
         self._model = r[1]
         self._rev = r[2]
         r = self.sendATcommand("+GSN")  # return IMEI
-        self._IMEI = r[0]
-        self.checkSIM()
+        self._IMEI = int(r[0])
+        self._checkSIM()
 
-    def checkSIM(self):
+    def _checkSIM(self) -> bool:
         # check if SIM is present
+        modem_log.debug("Checking SIM status")
         r = self.sendATcommand("+QSIMSTAT?")
         sim_status_read = False
         sim_flags = None
@@ -321,6 +350,7 @@ class QuectelModem:
         # print("SIM FLAGS=",sim_flags)
         if sim_flags is not None and sim_flags[1] == 1:
             # there is a SIM inserted
+            modem_log.debug("SIM inserted locked %s" % sim_lock)
             self._SIM = True
             if not sim_status_read:
                 r = self.sendATcommand("+CPIN?")
@@ -331,21 +361,51 @@ class QuectelModem:
                 if sim_lock[0] == "READY":
                     r = self.sendATcommand("+CIMI")
                     self._IMSI = r[0]
+                    if self._stored_imsi != self._IMSI:
+                        self._stored_imsi = self._IMSI
+                        self._store_def()
                     r = self.sendATcommand("+QCCID")
                     r = self.splitResponse("+QCCID", r[0])
                     # on ICCID, the last byte shall be left out
-                    iccid_l = len(r[0]) - 2
-                    self._ICCID = r[0][:iccid_l]
+                    modem_log.debug("Read ICCID result=%d" % r[0])
+                    self._ICCID = int(r[0]/100)
                     # print("ICCID:",self._ICCID,"Type:",type(self._ICCID))
                     # allow full notifications on registration change
                     self.sendATcommand("+CREG=2")
+            return True
         else:
             self._SIM = False
+            return False
+
+    def checkSIM(self, new_pin: str = None) -> bool:
+        if self._SIM_STATUS != 'READY':
+            # the SIM is non existent or locked
+            if self._SIM_STATUS == "SIM PIN":
+                modem_log.debug("Modem requires a PIN code")
+                if new_pin is not None:
+                    if not (4 <= len(new_pin) <= 6) or not new_pin.isdigit():
+                        modem_log.warning("New PIN code is not numeric")
+                    modem_log.debug("New PIN code=%s" % new_pin)
+                    self.setpin(new_pin)
+                elif self._pin_code is not None:
+                    modem_log.debug("Existing PIN code=%s" % self._pin_code)
+                    self.setpin(self._pin_code)
+                if self._checkSIM() and new_pin is not None:
+                    modem_log.debug("New PIN code OK")
+                    self._pin_code = new_pin
+                    self._store_def()
+                else:
+                    modem_log.debug("PIN code error")
+                    return False
+            else:
+                return False
+        else:
+            return True
 
     def model(self):
         return self._model
 
-    def manufacturer(self):
+    def manufacturer(self) -> str:
         return "Quectel"
 
     def SIM_Ready(self):
@@ -354,22 +414,25 @@ class QuectelModem:
     def SIM_Present(self):
         return self._SIM
 
-    def SIM_Status(self):
+    def SIM_Status(self) -> str:
         if self._SIM:
             return self._SIM_STATUS
         else:
             return "NO SIM"
 
-    def IMEI(self):
+    @property
+    def IMEI(self) -> int:
         return self._IMEI
 
-    def IMSI(self):
+    @property
+    def IMSI(self) -> int:
         if self._SIM and self._SIM_STATUS == "READY":
             return self._IMSI
         else:
             return None
 
-    def ICCID(self):
+    @property
+    def ICCID(self) -> int:
         if self._SIM and self._SIM_STATUS == "READY":
             return self._ICCID
         else:
@@ -398,7 +461,7 @@ class QuectelModem:
         """
         clearing forbidden PLMN list
         """
-        # print("Clearing FPLMN")
+        modem_log.debug("Clearing Forbidden PLMN")
         try:
             r = self.sendATcommand("+CRSM=214,28539,0,0,12,\"FFFFFFFFFFFFFFFFFFFFFFFF\"", True)
         except ModemException as err:
@@ -472,7 +535,7 @@ class QuectelModem:
         resp = self.sendATcommand("+CREG?")
         # warning some spontaneous messages can come
         vresp = self.checkAndSplitResponse("+CREG", resp)
-        if vresp == None:
+        if vresp is None:
             modem_log.error("No registration status returned (+CREG)")
             return False
         return self.decodeRegistration(vresp, log)
@@ -753,10 +816,11 @@ class QuectelModem:
     def logModemStatus(self, output=sys.stdout):
         modem_log.info("Quectel modem " + self._model + self._rev)
         # removing SVN display
-        modem_log.info("IMEI: %s -%d digits (incl CRC)" % (self._IMEI, len(self._IMEI)))
+        modem_log.info("IMEI: %s -%d digits (incl CRC)" % (self._IMEI, len(str(self._IMEI))))
         if self._SIM:
-            modem_log.info("SIM STATUS:" + self._SIM_STATUS)
-            if self._SIM_STATUS == "READY": modem_log.info("SIM IMSI:" + self._IMSI + " ICC-ID:" + str(self.ICCID()))
+            modem_log.info(f"SIM STATUS:{self._SIM_STATUS}")
+            if self._SIM_STATUS == "READY":
+                modem_log.info(f"SIM IMSI:{self._IMSI} ICC-ID:{self._ICCID}")
         else:
             modem_log.info("NO SIM Inserted")
 
@@ -768,8 +832,8 @@ class QuectelModem:
             out['gps_on'] = False
         out['SIM_status'] = self.SIM_Status()
         if self.SIM_Present():
-            out['IMSI'] = self.IMSI()
-            out['ICCID'] = str(self.ICCID())
+            out['IMSI'] = self.IMSI
+            out['ICCID'] = self.ICCID
             if self._isRegistered:
                 out['registered'] = True
                 out['network_reg'] = self._networkReg
@@ -965,4 +1029,4 @@ class QuectelModem:
         msgs = self.readSMS('ALL')
         if delete:
             self.sendATcommand('+CMGD=1,1')
-        return ms
+        return msgs
