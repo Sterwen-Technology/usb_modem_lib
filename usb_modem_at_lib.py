@@ -17,6 +17,7 @@ import os
 import subprocess
 import sys
 import time
+from collections import namedtuple
 
 
 import serial
@@ -120,6 +121,9 @@ def findUsbModem(mfg, verbose: bool = False):
         raise ModemException("No modem found")
 
 
+VisibleOperator = namedtuple("VisibleOperator", ["operator", "PLMN_ID", "access", "technology"])
+
+
 class QuectelModem:
 
     default_dir = "/data/solidsense/modem_gps"
@@ -162,11 +166,13 @@ class QuectelModem:
 
     def __init__(self, if_num=0, log=False, init=True):
 
-        if os.path.exists(self.default_dir):
-            filepath = self.default_dir
+        if os.getenv("MODEM_DIR") is not None:
+            self._filepath = os.getenv("MODEM_DIR")
+        elif os.path.exists(self.default_dir):
+            self._filepath = self.default_dir
         else:
-            filepath = os.getenv("HOME")
-        self._def_file = os.path.join(filepath, f'modem{if_num}.json')
+            self._filepath = os.getenv("HOME")
+        self._def_file = os.path.join(self._filepath, f'modem{if_num}.json')
         self._if_num = if_num
         try:
             with open(self._def_file, 'r') as fd:
@@ -176,14 +182,14 @@ class QuectelModem:
                 self._pin_code = self._modem_def.get('PIN', None)
                 self._stored_imsi = self._modem_def.get('IMSI', None)
         except (OSError, json.JSONDecodeError) as err:
-            modem_log.error(f"Failed to read modem{if_num} definition file {tty_file}:{err} => please run --detect option")
+            modem_log.error(f"Failed to read modem{if_num} definition file {self._def_file}:{err} => please run --detect option")
             raise
 
         self._tty = None
         self.open()
         self._logAT = log
         if self._logAT:
-            tracefile = os.path.join(filepath, "atcmd.log")
+            tracefile = os.path.join(self._filepath, "atcmd.log")
             self._logfp = open(tracefile, "a")
             os.fchmod(self._logfp.fileno(), 0o666)
             header = "*** New session %s ****\n" % datetime.datetime.now().isoformat(' ')
@@ -202,6 +208,7 @@ class QuectelModem:
         self._ICCID = None
         self._lac = 0
         self._ci = 0
+        self._sim_change_flag = False
 
         if init:
             self.initialize()
@@ -248,6 +255,10 @@ class QuectelModem:
         except OSError as err:
             modem_log.error(f"Failed to write modem{self._if_num} definition file {self._def_file}:{err}")
             raise
+
+    @property
+    def filepath(self) -> str:
+        return self._filepath
 
     #
     # send AT command and return the responses
@@ -362,13 +373,16 @@ class QuectelModem:
                     r = self.sendATcommand("+CIMI")
                     self._IMSI = r[0]
                     if self._stored_imsi != self._IMSI:
+                        modem_log.warning("SIM card has been changed)")
+                        self._sim_change_flag = True
                         self._stored_imsi = self._IMSI
                         self._store_def()
                     r = self.sendATcommand("+QCCID")
                     r = self.splitResponse("+QCCID", r[0])
                     # on ICCID, the last byte shall be left out
                     modem_log.debug("Read ICCID result=%d" % r[0])
-                    self._ICCID = int(r[0]/100)
+                    # discard the 2 low digits (CRC)
+                    self._ICCID = int(r[0] // 100)
                     # print("ICCID:",self._ICCID,"Type:",type(self._ICCID))
                     # allow full notifications on registration change
                     self.sendATcommand("+CREG=2")
@@ -401,6 +415,9 @@ class QuectelModem:
                 return False
         else:
             return True
+
+    def SIM_changed(self) -> bool:
+        return self._sim_change_flag
 
     def model(self):
         return self._model
@@ -471,22 +488,52 @@ class QuectelModem:
     #   split a complex response in several fields
     #
     def splitResponse(self, cmd, resp, raiseException=True):
+        '''
+        New version on 08/04/2024 to address the problem of coma between double quotes.
+        :param cmd: The AT command sent
+        :param resp: The response sent back by the modem
+        :param raiseException: if True raise an exception in case of decoding error
+        :return: a list with all response fields
+        '''
+        modem_log.debug("Decode response:%s" % resp)
         st = resp.find(cmd)
         if st == -1:
             modem_log.error("Modem sent unexpected response:" + cmd + " response:" + resp)
             if raiseException:
                 raise ModemException("Wrong response:" + cmd + " : " + resp)
             return None
-        st = len(cmd) + 2  # one for colon + one for space
-        toSplit = resp[st:]
+        index = len(cmd) + 2  # one for colon + one for space
         param = list()
-        for s in toSplit.split(','):
+        while index < len(resp):
             # check if we have double quote
-            if len(s) == 0:
-                continue
-            # print "|",s,"|"
-            if s[0] == '"':
-                s = s[1:len(s) - 1]
+            if resp[index] == '"':
+                # need to look for the next occurrence
+                start = index + 1
+                end = resp.find('"', start)
+                if end == -1:
+                    raise ModemException(f"Error decoding response {resp} at index {start}")
+                s = resp[start: end]
+                index = end + 1
+            elif resp[index] == ',':
+                index += 1
+                if resp[index] == ',':
+                    # generate an empty string
+                    s = ''
+                    index += 1
+                else:
+                    continue
+            else:
+                # print(f"decode index {index}={resp[index]}")
+                start = index
+                end = resp.find(',', start)
+                if end == -1:
+                    s = resp[start:]
+                    # raise ModemException(f"Error decoding response {resp} at index {start}")
+                    index = len(resp)
+                else:
+                    s = resp[start: end]
+                    index = end + 1
+            modem_log.debug("decode response:%s" % s)
             if s.isdigit():
                 param.append(int(s))
             else:
@@ -657,6 +704,16 @@ class QuectelModem:
         else:
             self._rssi = 99
 
+    def read_operators_names(self):
+        filename = os.path.join(self._filepath, f"operatorsDB{self._if_num}")
+        if self._sim_change_flag or not os.path.exists(filename):
+            # ok we need to re-create it
+            self.saveOperatorNames(fileName=filename)
+        else:
+            if not self.readOperatorNames(filename):
+                # let's re-create it again
+                self.saveOperatorNames(filename)
+
     def readOperatorNames(self, fileName):
         if self._operatorNames is not None:
             # already in memory
@@ -726,11 +783,10 @@ class QuectelModem:
         modem_log.info("Start looking for visible networks...")
         resp = self.sendATcommand("+COPS=?")
         modem_log.info("End of networks search")
+        result = []
         if len(resp) == 0:
-            result = ''
             return
         oper = resp[0].split('(')
-        result = ''
         # print ("Operators visible by the modem")
         for o in oper[1:]:
             # print o
@@ -746,9 +802,10 @@ class QuectelModem:
             r = int(fields[4][:ip])
             try:
                 # print (o,":",access[a],"PLMN:",self.decodePLMN(p)," AT:",rat[r])
-                res = "%s: %s - PLMN %d/%s - RAT: %s" % (o, access[a], p, str(self.decodePLMN(p)), rat[r])
-                modem_log.info(res)
-                result += res + '\n'
+                # res = "%s: %s - PLMN %d/%s - RAT: %s" % (o, access[a], p, str(self.decodePLMN(p)), rat[r])
+                oper = VisibleOperator(operator=o, PLMN_ID=p, access=access[a], technology=rat[r])
+                # modem_log.info(res)
+                result.append(oper)
             except KeyError:
                 continue
         return result
@@ -825,7 +882,7 @@ class QuectelModem:
             modem_log.info("NO SIM Inserted")
 
     def modemStatus(self, showOperators=False):
-        out = {'model': self._model + " " + self._rev, 'IMEI': self.IMEI()}
+        out = {'model': self._model + " " + self._rev, 'IMEI': self.IMEI}
         if self.gpsStatus():
             out['gps_on'] = True
         else:
@@ -960,11 +1017,11 @@ class QuectelModem:
 
     '''
 
-    def configureSMS(self):
+    def configureSMS(self, character_set='GSM'):
         # store all messages in the module
         self.sendATcommand('+CPMS="ME","ME","ME"')
         self.sendATcommand("+CMGF=1")
-        self.sendATcommand('+CSCS="GSM"')
+        self.sendATcommand(f'+CSCS="{character_set}"')
 
     def sendSMS(self, da, text):
         buf = 'AT+CMGS=' + '\"' + da + '\"\r'
@@ -987,8 +1044,7 @@ class QuectelModem:
             self.writeATBuffer(buf2)
             resp = self.readATResponse("+CMGS", False)
             # print(resp)
-            if resp != None:
-
+            if resp is not None:
                 result = self.checkResponse(resp[1])
                 if result.startswith("+CMS"):
                     error = self.splitResponse("+CMS ERROR", resp[1])
@@ -1006,6 +1062,7 @@ class QuectelModem:
             if r.startswith('+CMGL'):
                 msg = {}
                 msg_part = self.splitResponse('+CMGL', r)
+                # print(msg_part)
                 msg['index'] = msg_part[0]
                 msg['status'] = msg_part[1]
                 msg['origin'] = msg_part[2]
@@ -1024,9 +1081,10 @@ class QuectelModem:
         modem_log.debug("Reading unread SMS from modem")
         return self.readSMS('REC UNREAD')
 
-    def checkAllSMS(self, delete=False):
+    def checkAllSMS(self):
         modem_log.debug("Reading all SMS from modem")
         msgs = self.readSMS('ALL')
-        if delete:
-            self.sendATcommand('+CMGD=1,1')
         return msgs
+
+    def deleteSMS(self):
+        self.sendATcommand('+CMGD=1,1')
