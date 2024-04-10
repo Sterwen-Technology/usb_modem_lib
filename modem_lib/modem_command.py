@@ -9,13 +9,9 @@
 # Licence:     Eclipse Public License 2.0
 # -------------------------------------------------------------------------------
 
-import sys
-import time
-import json
-import datetime
 from argparse import ArgumentParser
 
-from usb_modem_at_lib import *
+from modem_lib.usb_modem_at_lib import *
 
 log = logging.getLogger('Modem_GPS_Service')
 
@@ -167,7 +163,7 @@ def main():
             current_time = start_time
             print(f"Waiting {opts.wait} seconds for attachment")
             while (current_time - start_time) < opts.wait:
-                sys.stderr.write(".")
+                sys.stderr.write("..")
                 time.sleep(1.0)
                 if modem.networkStatus():
                     sys.stderr.write("\n")

@@ -5,6 +5,10 @@ description = "Python package to manage usb modems"
 authors = ["laurent <laurent.carre@sterwen-technology.eu>"]
 license = "Eclipse Public Licence 2.0"
 readme = "README.md"
+packages = [ {include = "modem_lib"}]
+
+[tool.poetry.scripts]
+modem_command = 'modem_lib.modem_command:main'
 
 [tool.poetry.dependencies]
 python = ">=3.7"
