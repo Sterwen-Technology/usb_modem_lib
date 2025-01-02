@@ -380,9 +380,22 @@ class QuectelModem:
                     r = self.sendATcommand("+QCCID")
                     r = self.splitResponse("+QCCID", r[0])
                     # on ICCID, the last byte shall be left out
-                    modem_log.debug("Read ICCID result=%d" % r[0])
+                    modem_log.debug(f"Read ICCID result{r[0]}")
                     # discard the 2 low digits (CRC)
-                    self._ICCID = int(r[0] // 100)
+                    # correction 2025-01-02 QCCID is a string with 2 supplémentary characters
+                    # but can also be an int depending on the SIM card
+                    # was corrected on the fly or the system on Swann
+                    # print(f"QICCD={r[0]} type {type(r[0])}")
+                    if type(r[0]) is int:
+                        qiccid_str = str(r[0])
+                    else:
+                        qiccid_str = r[0]
+                    if len(qiccid_str) > 18:
+                        self._ICCID = qiccid_str[:18]
+                    else:
+                        self._ICCID = qiccid_str
+                    # print(f"QCCID {r[0]} ICCID {self._ICCID}")
+                    # self._ICCID = int(r[0] // 100)
                     # print("ICCID:",self._ICCID,"Type:",type(self._ICCID))
                     # allow full notifications on registration change
                     self.sendATcommand("+CREG=2")

@@ -1,17 +1,17 @@
 # -------------------------------------------------------------------------------
-# Name:        Test Modem
-# Purpose:     Perform basic testing of the modem function
+# Name:        modem_command
+# Purpose:     Perform direct commands to yje modem via the modem_lib
 #
 # Author:      Laurent Carré
 #
-# Created:     11/02/2020
-# Copyright:   (c) Laurent Carré Sterwen Technologies 2020-2024
+# Created:     11/04/2024
+# Copyright:   (c) Laurent Carré Sterwen Technology 2020-2025
 # Licence:     Eclipse Public License 2.0
 # -------------------------------------------------------------------------------
 
 from argparse import ArgumentParser
 
-from modem_lib.usb_modem_at_lib import *
+from usb_modem_at_lib import *
 
 log = logging.getLogger('Modem_GPS_Service')
 
