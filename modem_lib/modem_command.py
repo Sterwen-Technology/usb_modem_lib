@@ -9,9 +9,14 @@
 # Licence:     Eclipse Public License 2.0
 # -------------------------------------------------------------------------------
 
+import logging
+import sys
+import json
+import datetime
+import time
 from argparse import ArgumentParser
 
-from usb_modem_at_lib import *
+from modem_lib import *
 
 log = logging.getLogger('Modem_GPS_Service')
 
@@ -147,7 +152,7 @@ def main():
     print(f"Modem and SIM card ready IMSI {modem.IMSI}, ICC-ID {modem.ICCID}")
     # read the operators name file
     modem.read_operators_names()
-    # now we need to check the network status or we just look for networks
+    # now we need to check the network status, or we just look for networks
     if opts.list:
         result = modem.visibleOperators()
         jresult = json.dumps(result, indent=2)
@@ -178,7 +183,7 @@ def main():
         checkSMS(modem)
     if opts.sms_to is not None:
         if opts.text is None:
-            modem_log.error("No text for the SMS")
+            log.error("No text for the SMS")
         else:
             resp = modem.sendSMS(opts.sms_to, opts.text)
             if resp == "OK":

@@ -1,11 +1,12 @@
 [tool.poetry]
 name = "usb_modem_lib"
-version = "0.9"
+version = "0.91"
 description = "Python package to manage usb modems"
 authors = ["laurent <laurent.carre@sterwen-technology.eu>"]
 license = "Eclipse Public Licence 2.0"
 readme = "README.md"
 packages = [ {include = "modem_lib"}]
+include = [ { path="runenv", format=[ "sdist", "wheel"]}]
 
 [tool.poetry.scripts]
 modem_command = 'modem_lib.modem_command:main'

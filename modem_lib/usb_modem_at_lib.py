@@ -54,7 +54,7 @@ class UsbTty:
             return s_str[start_value: end_value], end_value
 
         c_start = 0
-        # print(serial_definition)
+
         for s_key in self.keys:
             try:
                 val, c_start = extract_key_value(serial_definition, s_key, c_start)
@@ -73,9 +73,9 @@ class UsbTty:
 
 
 def findUsbModem(mfg, verbose: bool = False):
-    '''
+    """
     Look on the USB system and detect the modem from the manufacturer
-    '''
+    """
     if not sys.platform.startswith('linux'):
         raise ModemException("Modem USB interface search only on Linux")
     if os.geteuid() != 0:
