@@ -6,7 +6,9 @@ authors = ["laurent <laurent.carre@sterwen-technology.eu>"]
 license = "Eclipse Public Licence 2.0"
 readme = "README.md"
 packages = [ {include = "modem_lib"}]
-include = [ { path="runenv", format=[ "sdist", "wheel"]}]
+include = [ { path="runenv", format=[ "sdist", "wheel"]},
+            { path="usb_modem_lib.html", format=[ "sdist", "wheel"]}
+            ]
 
 [tool.poetry.scripts]
 modem_command = 'modem_lib.modem_command:main'

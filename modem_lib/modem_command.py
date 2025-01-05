@@ -189,6 +189,7 @@ def main():
     if opts.sms:
         checkSMS(modem)
     if opts.sms_to is not None:
+        modem.check_sms_mode()
         if opts.text is None:
             log.error("No text for the SMS")
         else:

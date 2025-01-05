@@ -6,7 +6,7 @@
 # Author:      Laurent Carré
 #
 # Created:     26/06/2019
-# Copyright:   (c) Laurent Carré Sterwen Technologies 2019-2024
+# Copyright:   (c) Laurent Carré Sterwen Technologies 2019-2025
 # Licence:     Eclipse Public License 2.0
 # -------------------------------------------------------------------------------
 
@@ -825,7 +825,7 @@ class QuectelModem:
         """
         Retrieve and returns the list of visible operators
         :return:
-        :rtype:
+        :rtype: list of dict
         """
         access = {0: 'Unknown', 1: 'Available', 2: 'Current', 3: 'Forbidden'}
         rat = {0: 'GSM', 2: 'UTRAN', 3: 'GSM/GPRS', 4: '3G HSDPA', 5: '3G HSUPA',
@@ -932,8 +932,8 @@ class QuectelModem:
         else:
             modem_log.info("NO SIM Inserted")
 
-    def modemStatus(self, showOperators=False):
-        out = {'model': self._model + " " + self._rev, 'IMEI': self.IMEI}
+    def modemStatus(self, show_operators=False) -> dict:
+        out = {'model': f"{self._model} {self._rev} IMEI:{self.IMEI}"}
         if self.gpsStatus():
             out['gps_on'] = True
         else:
@@ -953,11 +953,11 @@ class QuectelModem:
                 out['rat'] = self._rat
                 out['band'] = self._band
                 out['rssi'] = self._rssi
-                if showOperators:
+                if show_operators:
                     out['operators'] = self.visibleOperators()
             else:
                 out['registered'] = False
-                if showOperators:
+                if show_operators:
                     out['operators'] = self.visibleOperators()
 
         return out
@@ -1085,8 +1085,26 @@ class QuectelModem:
         self.sendATcommand("+CMGF=1")
         self.sendATcommand(f'+CSCS="{character_set}"')
 
+    def check_sms_mode(self) -> int:
+        cmd = "+CMGF?"
+        resp = self.sendATcommand(cmd)
+        mode = self.splitResponse("+CMGF", resp[0])
+        return mode[0]
+
     def sendSMS(self, da, text):
-        buf = 'AT+CMGS=' + '\"' + da + '\"\r'
+        """
+        Send SMS in text mode
+        :param da: destination MSISDN
+        :type da: str
+        :param text:
+        :type text:
+        :return: "OK" if no error
+        :rtype: str
+        """
+        # first check that we are in the right mode
+        if self.check_sms_mode() != 1:
+            self.configureSMS()
+        buf = f'AT+CMGS="{da}"\r'
         # print(buf)
         self.writeATBuffer(buf)
         # read the first response
@@ -1094,12 +1112,10 @@ class QuectelModem:
         prompt = self._tty.read(1)
         # print("Prompt received:",prompt[0])
         if prompt[0] != 62:
-            resp[0] = prompt[0]
-            buf = self._tty.read_until()
-            resp = (resp.append(buf)).decode()
-            resp = resp.strip('\r\n')
-            modem_log.error("Error sending SMS:" + resp)
-            return "SEND ERROR"
+            # read error message
+            err_msg = self._tty.read_until().strip(b'\r\n').decode()
+            modem_log.error(f"Error sending SMS:{err_msg}")
+            return f"SEND ERROR: {err_msg}"
         else:
             buf2 = text + '\x1a'
             # print(buf2)
@@ -1121,14 +1137,15 @@ class QuectelModem:
         resp = self.sendATcommand(cmd)
         messages = []
         for r in resp:
-            msg = {}
             if r.startswith('+CMGL'):
                 msg_part = self.splitResponse('+CMGL', r)
                 # print(msg_part)
-                msg['index'] = msg_part[0]
-                msg['status'] = msg_part[1]
-                msg['origin'] = msg_part[2]
-                msg['sms_time'] = msg_part[4]
+                msg = {
+                    'index': msg_part[0],
+                    'status': msg_part[1],
+                    'origin': msg_part[2],
+                    'sms_time': msg_part[4]
+                }
                 # modem_log.debug("Message received from:"+msg_part[2])
             else:
                 r = r.strip('\r\n')
