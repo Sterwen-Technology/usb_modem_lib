@@ -1,5 +1,6 @@
 # Modem USB Lib
-Python package and utilities to manage Quectel (and others) USB modems
+Python package and CLI to manage Quectel (and others) USB modems
+
 
 
 ## Support
@@ -7,9 +8,9 @@ Python package and utilities to manage Quectel (and others) USB modems
 For any problem encountered, please open an issue in this repository.
 
 ## Roadmap
-The current stable version is V2.1. Documentation is aligned on this version.
+The current stable version is V0.93. Documentation is aligned on this version.
 
-The version 2.1 includes various corrections and Digital Yacht iKonvert and Yachting Digital improved support
+The version 0.93 includes various corrections and Digital Yacht iKonvert and Yachting Digital improved support
 
 
 ## Contributing

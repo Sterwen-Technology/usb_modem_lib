@@ -23,7 +23,6 @@ from collections import namedtuple
 import serial
 
 modem_log = logging.getLogger('Modem_GPS_Service.' + __name__)
-test_counter = 0
 
 
 class ModemException(Exception):
@@ -126,27 +125,56 @@ VisibleOperator = namedtuple("VisibleOperator", ["operator", "PLMN_ID", "access"
 
 class QuectelModem:
 
-    default_dir = "/data/solidsense/modem_gps"
+    @staticmethod
+    def get_filepath(option_path: str=None) -> str:
+        """
+        :param option_path: path for modem definition given in arguments
+        :type option_path:
+        :return: path to be used
+        :rtype: str
+        """
+        if option_path is not None:
+            if os.path.exists(option_path):
+                return option_path
+        elif (env_path := os.getenv("MODEM_DIR")) is not None:
+            if os.path.exists(env_path):
+                return env_path
+        # ok, nothing from the environment let's go to defaults
+        if os.getuid() == 0:
+            if (user_name := os.getenv("SUDO_USER")) is not None:
+                # ok in sudo we have the original user
+                r = subprocess.run(f"getent passwd {user_name}", capture_output=True, shell=True)
+                if r.returncode == 0:
+                    lines = r.stdout.decode('utf-8').split('\n')
+                    fields = lines[0].split(':')
+                    env_path = fields[5]
+                else:
+                    modem_log.error(f"Error retrieving home directory for user {user_name} {r.stderr}")
+                    raise ValueError
+            else:
+                # we don't know what to do
+                raise ValueError
+        else:
+            env_path = os.getenv("HOME")
+        return env_path
 
     @staticmethod
-    def checkModemPresence(save_modem=False, verbose=False):
-        '''
+    def checkModemPresence(opts, save_modem=True):
+        """
         Check the physical presence of the modem
         raise ModemException when no modem is found
 
         when save_modem is true the modem_definition file is saved
 
-        '''
+        """
         # print("User ID=", os.geteuid())
-        modem_def = findUsbModem('Quectel', verbose)
+        modem_def = findUsbModem('Quectel', opts.verbose)
         if save_modem:
             if modem_def.get('tty_list') is None:
                 modem_log.error("Incorrect Modem characteristic detection")
                 return
-            if os.path.exists(QuectelModem.default_dir):
-                modem_file = os.path.join(QuectelModem.default_dir, 'modem0.json')
-            else:
-                modem_file = os.path.join(os.getenv("HOME"), "modem0.json")
+            env_dir = QuectelModem.get_filepath(opts.dir)
+            modem_file = os.path.join(env_dir, "modem0.json")
             modem_save = {
                 'model': modem_def['model'],
                 'NMEA': modem_def['tty_list'][1].tty_name,
@@ -155,8 +183,6 @@ class QuectelModem:
             data = json.dumps(modem_save, indent=1)
             try:
                 with open(modem_file, 'w') as fd:
-                    # fd.write("# File generated automatically do not modify \n")
-                    # fd.write("# to make that file actual run Test_Modem.py as sudo\n\n")
                     fd.write(data)
                     fd.write("\n")
             except OSError as err:
@@ -164,15 +190,22 @@ class QuectelModem:
                 raise
         return modem_def
 
-    def __init__(self, if_num=0, log=False, init=True):
+    def __init__(self, if_num=0, log=False, * , init=True, filepath=None):
+        """
+        New modem object
+        :param if_num: modem number (default 0)
+        :type if_num: int
+        :param log: If True logs all exchanges with the modem (default False)
+        :type log: bool
+        :param init: If True perform a modem communication init sequence (default True)
+        :type init: bool
+        :param filepath: the path to the modem configuration and log files
+        :type filepath: str
+        """
 
-        if os.getenv("MODEM_DIR") is not None:
-            self._filepath = os.getenv("MODEM_DIR")
-        elif os.path.exists(self.default_dir):
-            self._filepath = self.default_dir
-        else:
-            self._filepath = os.getenv("HOME")
+        self._filepath = self.get_filepath(filepath)
         self._def_file = os.path.join(self._filepath, f'modem{if_num}.json')
+        modem_log.info(f"Modem definition file:{self._def_file}")
         self._if_num = if_num
         try:
             with open(self._def_file, 'r') as fd:
@@ -189,7 +222,7 @@ class QuectelModem:
         self.open()
         self._logAT = log
         if self._logAT:
-            tracefile = os.path.join(self._filepath, "atcmd.log")
+            tracefile = os.path.join(self._filepath, f"atcmd{self._if_num}.log")
             self._logfp = open(tracefile, "a")
             os.fchmod(self._logfp.fileno(), 0o666)
             header = "*** New session %s ****\n" % datetime.datetime.now().isoformat(' ')
@@ -260,10 +293,10 @@ class QuectelModem:
     def filepath(self) -> str:
         return self._filepath
 
-    #
+    # low level I/O methods
     # send AT command and return the responses
     #
-    def writeATBuffer(self, buf):
+    def writeATBuffer(self, buf: str):
         # print buf
         if self._logAT:
             self.logATCommand(buf)
@@ -272,12 +305,20 @@ class QuectelModem:
             self._tty.write(buf.encode())
             self._tty.flush()
         except serial.serialutil.SerialException as err:
-            modem_log.error("Send AT command Write error " + str(err) + " command:" + buf)
+            modem_log.error(f"Send AT command Write error {err} command:{buf}")
             if self._logAT:
                 self._logfp.write(str(err) + "\n")
             raise ModemException(err)
 
-    def readATResponse(self, param, raiseException):
+    def readATResponse(self, param: str, raiseException: bool) -> list:
+        """
+        :param param: command string that was sent
+        :type param: str
+        :param raiseException: if True raise an exception if read or decoding error
+        :type raiseException:
+        :return:
+        :rtype: list of str
+        """
         read_resp = True
         nb_resp = 0
         resp_list = []
@@ -319,7 +360,7 @@ class QuectelModem:
         # print "Number of responses:",nbResp
         return resp_list
 
-    def sendATcommand(self, param=None, raiseException=False):
+    def sendATcommand(self, param: str=None, raiseException: bool=False) -> list:
         buf = "AT"
         if param is not None:
             buf = buf + param
@@ -406,7 +447,7 @@ class QuectelModem:
 
     def checkSIM(self, new_pin: str = None) -> bool:
         if self._SIM_STATUS != 'READY':
-            # the SIM is non existent or locked
+            # the SIM is non-existent or locked
             if self._SIM_STATUS == "SIM PIN":
                 modem_log.debug("Modem requires a PIN code")
                 if new_pin is not None:
@@ -469,7 +510,7 @@ class QuectelModem:
             return None
 
     def setpin(self, pin):
-        cmd = "+CPIN=" + pin
+        cmd = f"+CPIN={pin}"
         try:
             self.sendATcommand(cmd)
         except ModemException as err:
@@ -501,19 +542,19 @@ class QuectelModem:
     #   split a complex response in several fields
     #
     def splitResponse(self, cmd, resp, raiseException=True):
-        '''
-        New version on 08/04/2024 to address the problem of coma between double quotes.
+        """
+        New version on 08/04/2024 to address the problem of comma between double quotes.
         :param cmd: The AT command sent
         :param resp: The response sent back by the modem
         :param raiseException: if True raise an exception in case of decoding error
         :return: a list with all response fields
-        '''
+        """
         modem_log.debug("Decode response:%s" % resp)
         st = resp.find(cmd)
         if st == -1:
-            modem_log.error("Modem sent unexpected response:" + cmd + " response:" + resp)
+            modem_log.error(f"Modem sent unexpected response:{cmd} response:{resp}")
             if raiseException:
-                raise ModemException("Wrong response:" + cmd + " : " + resp)
+                raise ModemException(f"Unexpected response:{cmd} => {resp}")
             return None
         index = len(cmd) + 2  # one for colon + one for space
         param = list()
@@ -565,10 +606,10 @@ class QuectelModem:
         return resp[:cmd]
 
     def checkAndSplitResponse(self, cmd, resp):
-        '''
+        """
         check if the expected response is returned
         and then split it for processing
-        '''
+        """
         for r in resp:
             param = self.splitResponse(cmd, r, False)
             if param is not None:
@@ -583,15 +624,7 @@ class QuectelModem:
 
         if not self.SIM_Ready():
             return False
-        # self.sendATcommand("+CREG=2")
-        # self._networkReg = None
-        '''
-        global test_counter
-        test_counter += 1
-        if test_counter > 2 :
-            modem_log.info("Test = error simutation")
-            return False
-        '''
+
         resp = self.sendATcommand("+CREG?")
         # warning some spontaneous messages can come
         vresp = self.checkAndSplitResponse("+CREG", resp)
@@ -604,10 +637,10 @@ class QuectelModem:
         return self._networkReg
 
     def decodeRegistration(self, param, log):
-        '''
+        """
         Decode the registration message
         Read all network attachment characteristics
-        '''
+        """
 
         # param=self.splitResponse("+CREG",vresp)
         # modem_log.info("Network registration status:"+str(param[1]))
@@ -721,7 +754,7 @@ class QuectelModem:
         filename = os.path.join(self._filepath, f"operatorsDB{self._if_num}")
         if self._sim_change_flag or not os.path.exists(filename):
             # ok we need to re-create it
-            self.saveOperatorNames(fileName=filename)
+            self.saveOperatorNames(filename=filename)
         else:
             if not self.readOperatorNames(filename):
                 # let's re-create it again
@@ -752,25 +785,25 @@ class QuectelModem:
                 return False
 
             self._operatorNames = in_str['operators']
-            modem_log.info("Succefully read operators DB with:" + str(len(self._operatorNames)) + " entries")
+            modem_log.info("Successfully read operators DB with:" + str(len(self._operatorNames)) + " entries")
             fp.close()
             return True
         else:
             return False
 
-    def saveOperatorNames(self, fileName):
+    def saveOperatorNames(self, filename):
         # print("saving operators DB")
         if not self.SIM_Ready():
             return
         try:
-            fp = open(fileName, "w")
+            fp = open(filename, "w")
         except OSError as err:
-            modem_log.error("Writing operators database:" + fileName + " :" + str(err))
+            modem_log.error("Writing operators database:" + filename + " :" + str(err))
             return
         # now retrieve all network names
         resp = self.sendATcommand("+COPN")
         self._operatorNames = {}
-        nbOper = 0
+        nb_oper = 0
         out = {}
         out['IMSI'] = self._IMSI
         for r in resp:
@@ -778,17 +811,22 @@ class QuectelModem:
             # print oper[0],",",oper[1]
             plmnid = oper[0]
             self._operatorNames[plmnid] = oper[1]
-            nbOper = nbOper + 1
+            nb_oper = nb_oper + 1
         out['operators'] = self._operatorNames
         # now save in file
         json.dump(out, fp)
-        modem_log.info("Saved " + str(nbOper) + " names in:" + fileName)
+        modem_log.info("Saved " + str(nb_oper) + " names in:" + filename)
         fp.close()
 
     #
     #  display visible operators
     #
-    def visibleOperators(self):
+    def visibleOperators(self) -> list:
+        """
+        Retrieve and returns the list of visible operators
+        :return:
+        :rtype:
+        """
         access = {0: 'Unknown', 1: 'Available', 2: 'Current', 3: 'Forbidden'}
         rat = {0: 'GSM', 2: 'UTRAN', 3: 'GSM/GPRS', 4: '3G HSDPA', 5: '3G HSUPA',
                6: '3G HSDPA/HSUPA', 7: 'LTE', 100: 'CDMA'}
@@ -798,7 +836,7 @@ class QuectelModem:
         modem_log.info("End of networks search")
         result = []
         if len(resp) == 0:
-            return
+            return result
         oper = resp[0].split('(')
         # print ("Operators visible by the modem")
         for o in oper[1:]:
@@ -824,9 +862,9 @@ class QuectelModem:
         return result
 
     def selectOperator(self, operator, name_format='long', rat=None):
-        '''
+        """
         select an operator => automatic if failed
-        '''
+        """
         rat_index = {"GSM": 0, "UTRAN": 2, "LTE": 7}
         modem_log.info("Selecting the operator:" + str(operator) + " with RAT:" + str(rat))
         if operator == "CURRENT":
@@ -924,11 +962,13 @@ class QuectelModem:
 
         return out
 
-    #
-    # perform a modem reset
-    #
-
     def resetCard(self):
+        """
+        Performs a modem soft reset
+        Modem is becoming non-effective for 10 to 20 secinds after this call
+        :return:
+        :rtype:
+        """
         modem_log.info("TURNING RADIO OFF AND ON")
         modem_log.debug("Going to flight mode")
         self.sendATcommand("+CFUN=0", raiseException=True)
@@ -936,7 +976,7 @@ class QuectelModem:
         modem_log.debug("Restoring normal mode")
         self.sendATcommand("+CFUN=1", raiseException=True)
         modem_log.info("Allow 20-30 sec for the modem to restart")
-        # time.sleep(20)
+
 
     def factoryDefault(self):
         modem_log.info("RESTORING FACTORY DEFAULT")
@@ -951,7 +991,11 @@ class QuectelModem:
     # turn GPS on with output on ttyUSB1 as NMEA sentence
     #
     def gpsOn(self):
-
+        """
+        Turn GPS on
+        :return:
+        :rtype:
+        """
         resp = self.sendATcommand("+QGPSCFG=\"outport\",\"usbnmea\"", True)
         resp = self.sendATcommand("+QGPSCFG=\"autogps\",1", True)
         resp = self.sendATcommand("+QGPS=1", True)
@@ -960,7 +1004,12 @@ class QuectelModem:
         resp = self.sendATcommand("+QGPSEND", True)
         resp = self.sendATcommand("+QGPSCFG=\"autogps\",0", True)
 
-    def getGpsStatus(self):
+    def getGpsStatus(self) -> dict:
+        """
+        Reads the full GPS status from the modem and returns all parameters in a dictionary
+        :return:
+        :rtype:
+        """
         status = {}
         if not self.gpsStatus():
             status['state'] = 'off'
@@ -999,9 +1048,9 @@ class QuectelModem:
             status['fix'] = False
         else:
             status['fix'] = True
-            status["Time_UTC"] = param[0]
-            status["Latitude"] = param[1]
-            status['Longitude'] = param[2]
+            status["time_UTC"] = param[0]
+            status["latitude"] = param[1]
+            status['longitude'] = param[2]
             status['hdop'] = param[3]
             status['Altitude'] = param[4]
             status['date'] = param[9]
@@ -1072,8 +1121,8 @@ class QuectelModem:
         resp = self.sendATcommand(cmd)
         messages = []
         for r in resp:
+            msg = {}
             if r.startswith('+CMGL'):
-                msg = {}
                 msg_part = self.splitResponse('+CMGL', r)
                 # print(msg_part)
                 msg['index'] = msg_part[0]

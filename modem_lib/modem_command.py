@@ -41,6 +41,7 @@ def _parser():
                    help="Read SMS")
     p.add_argument('-log_at', '--log_at', action='store_true', help="Log all low level exchanges with the modem")
     p.add_argument('-rescan', '--rescan', action='store_true', help='Start scanning for operator')
+    p.add_argument('-dir', '--dir', action="store", default=None, help="Directory for modem configuration file")
 
     return p
 
@@ -71,8 +72,14 @@ def checkGPS(modem):
         log.info("Reading GPS")
         sg = modem.getGpsStatus()
         if sg['fix']:
-            pf = "LAT {0} LONG {1}".format(sg['Latitude'], sg['Longitude'])
-            log.info(pf)
+            latitude = float(sg['latitude'][:-1]) / 100.
+            if sg['latitude'][-1] == 'S':
+                latitude = -latitude
+            longitude = float(sg['longitude'][:-1]) / 100.
+            if sg['longitude'][-1] == 'W':
+                longitude = -longitude
+            pf = f"GPS latitude {latitude} longitude {longitude} date {sg['date']} time {sg['time_UTC']}"
+            print(pf)
         else:
             log.info("GPS not fixed")
     else:
@@ -114,14 +121,14 @@ def main():
     if opts.detect:
         print("Detection of the modem...")
         try:
-            modem_def = QuectelModem.checkModemPresence(save_modem=True, verbose=opts.verbose)
+            modem_def = QuectelModem.checkModemPresence(opts)
         except ModemException as err:
             print(f"Error during modem detection {err}")
             return 2
         print(f"Modem type {modem_def['model']} found with control tty {modem_def['tty_list'][2].tty_name}")
 
     try:
-        modem = QuectelModem(0, opts.log_at)
+        modem = QuectelModem(0, log=opts.log_at, filepath=opts.dir)
     except Exception as err:
         log.error(str(err))
         return 2

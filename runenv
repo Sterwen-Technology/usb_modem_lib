@@ -1,5 +1,6 @@
 #!/bin/bash
 # run a python script in the local virtual env
+
 if [ -f .python_env ]
 then
     PYTHON_PATH=$(cat .python_env)
@@ -7,5 +8,5 @@ then
 else
     PYTHON=python
 fi
-echo "$PYTHON" $*
+# echo "$PYTHON" $*
 $PYTHON $*
