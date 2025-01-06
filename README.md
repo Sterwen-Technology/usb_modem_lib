@@ -74,7 +74,8 @@ The --detect option shall be run before any other use of the library. It shall b
 
 ## API
 
-The API is based on single class **QuectelModem** that needs to be instantiated for each modem managed by it.
+The API is based on single abstract class **UsbATModem**.
+The actual class to be instantiated is vendor specific and currently only **QuectelModem** is supplied.
 
 [generated documentation](usb_modem_at_lib.html)
 

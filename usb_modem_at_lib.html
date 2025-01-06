@@ -11,13 +11,13 @@
 <td class="extra"><a href=".">index</a><br><a href="file:/mnt/meaban/Sterwen-Tech-SW/usb_modem_lib/modem_lib/usb_modem_at_lib.py">/mnt/meaban/Sterwen-Tech-SW/usb_modem_lib/modem_lib/usb_modem_at_lib.py</a></td></tr></table>
     <p><span class="code">#&nbsp;-*-&nbsp;coding:&nbsp;utf-8&nbsp;-*-<br>
 #&nbsp;-------------------------------------------------------------------------------<br>
-#&nbsp;Name:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Quectel&nbsp;modem&nbsp;manager<br>
+#&nbsp;Name:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;USB&nbsp;AT&nbsp;modem&nbsp;manager<br>
 #&nbsp;Purpose:<br>
 #<br>
 #&nbsp;Author:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Laurent&nbsp;Carré<br>
 #<br>
 #&nbsp;Created:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;26/06/2019<br>
-#&nbsp;Copyright:&nbsp;&nbsp;&nbsp;(c)&nbsp;Laurent&nbsp;Carré&nbsp;Sterwen&nbsp;Technologies&nbsp;2019-2024<br>
+#&nbsp;Copyright:&nbsp;&nbsp;&nbsp;(c)&nbsp;Laurent&nbsp;Carré&nbsp;Sterwen&nbsp;Technologies&nbsp;2019-2025<br>
 #&nbsp;Licence:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Eclipse&nbsp;Public&nbsp;License&nbsp;2.0<br>
 #&nbsp;-------------------------------------------------------------------------------</span></p>
 <p>
@@ -50,7 +50,7 @@
 <dt class="heading-text"><a href="builtins.html#object">builtins.object</a>
 </dt><dd>
 <dl>
-<dt class="heading-text"><a href="usb_modem_at_lib.html#QuectelModem">QuectelModem</a>
+<dt class="heading-text"><a href="usb_modem_at_lib.html#UsbATModem">UsbATModem</a>
 </dt><dt class="heading-text"><a href="usb_modem_at_lib.html#UsbTty">UsbTty</a>
 </dt></dl>
 </dd>
@@ -127,23 +127,25 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 </td></tr></table> <p>
 <table class="section">
 <tr class="decor title-decor heading-text">
-<td class="section-title" colspan=3>&nbsp;<br><a name="QuectelModem">class <strong>QuectelModem</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
+<td class="section-title" colspan=3>&nbsp;<br><a name="UsbATModem">class <strong>UsbATModem</strong></a>(<a href="builtins.html#object">builtins.object</a>)</td></tr>
     
 <tr><td class="decor title-decor" rowspan=2><span class="code">&nbsp;&nbsp;&nbsp;</span></td>
-<td class="decor title-decor" colspan=2><span class="code"><a href="#QuectelModem">QuectelModem</a>(if_num=0,&nbsp;log=False,&nbsp;*,&nbsp;init=True,&nbsp;filepath=None)<br>
+<td class="decor title-decor" colspan=2><span class="code"><a href="#UsbATModem">UsbATModem</a>(if_num=0,&nbsp;log=False,&nbsp;*,&nbsp;init=True,&nbsp;filepath=None)<br>
 &nbsp;<br>
 <br>&nbsp;</span></td></tr>
 <tr><td>&nbsp;</td>
 <td class="singlecolumn">Methods defined here:<br>
-<dl><dt><a name="QuectelModem-SIM_Present"><strong>SIM_Present</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-SIM_Present"><strong>SIM_Present</strong></a>(self) -&gt; bool</dt></dl>
 
-<dl><dt><a name="QuectelModem-SIM_Ready"><strong>SIM_Ready</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-SIM_Ready"><strong>SIM_Ready</strong></a>(self) -&gt; bool</dt><dd><span class="code">True&nbsp;if&nbsp;SIM&nbsp;is&nbsp;ready<br>
+:return:<br>
+:rtype:&nbsp;bool</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-SIM_Status"><strong>SIM_Status</strong></a>(self) -&gt; str</dt></dl>
+<dl><dt><a name="UsbATModem-SIM_Status"><strong>SIM_Status</strong></a>(self) -&gt; str</dt></dl>
 
-<dl><dt><a name="QuectelModem-SIM_changed"><strong>SIM_changed</strong></a>(self) -&gt; bool</dt></dl>
+<dl><dt><a name="UsbATModem-SIM_changed"><strong>SIM_changed</strong></a>(self) -&gt; bool</dt></dl>
 
-<dl><dt><a name="QuectelModem-__init__"><strong>__init__</strong></a>(self, if_num=0, log=False, *, init=True, filepath=None)</dt><dd><span class="code">New&nbsp;modem&nbsp;<a href="builtins.html#object">object</a><br>
+<dl><dt><a name="UsbATModem-__init__"><strong>__init__</strong></a>(self, if_num=0, log=False, *, init=True, filepath=None)</dt><dd><span class="code">New&nbsp;modem&nbsp;<a href="builtins.html#object">object</a><br>
 :param&nbsp;if_num:&nbsp;modem&nbsp;number&nbsp;(default&nbsp;0)<br>
 :type&nbsp;if_num:&nbsp;int<br>
 :param&nbsp;log:&nbsp;If&nbsp;True&nbsp;logs&nbsp;all&nbsp;exchanges&nbsp;with&nbsp;the&nbsp;modem&nbsp;(default&nbsp;False)<br>
@@ -153,101 +155,84 @@ Data descriptors inherited from <a href="builtins.html#BaseException">builtins.B
 :param&nbsp;filepath:&nbsp;the&nbsp;path&nbsp;to&nbsp;the&nbsp;modem&nbsp;configuration&nbsp;and&nbsp;log&nbsp;files<br>
 :type&nbsp;filepath:&nbsp;str</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-allowRoaming"><strong>allowRoaming</strong></a>(self)</dt><dd><span class="code">#&nbsp;allow&nbsp;roaming</span></dd></dl>
+<dl><dt><a name="UsbATModem-allowRoaming"><strong>allowRoaming</strong></a>(self)</dt><dd><span class="code">#&nbsp;allow&nbsp;roaming</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-checkAllSMS"><strong>checkAllSMS</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-checkAllSMS"><strong>checkAllSMS</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-checkAndSplitResponse"><strong>checkAndSplitResponse</strong></a>(self, cmd, resp)</dt><dd><span class="code">check&nbsp;if&nbsp;the&nbsp;expected&nbsp;response&nbsp;is&nbsp;returned<br>
+<dl><dt><a name="UsbATModem-checkAndSplitResponse"><strong>checkAndSplitResponse</strong></a>(self, cmd, resp)</dt><dd><span class="code">check&nbsp;if&nbsp;the&nbsp;expected&nbsp;response&nbsp;is&nbsp;returned<br>
 and&nbsp;then&nbsp;split&nbsp;it&nbsp;for&nbsp;processing</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-checkReceivedSMS"><strong>checkReceivedSMS</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-checkReceivedSMS"><strong>checkReceivedSMS</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-checkResponse"><strong>checkResponse</strong></a>(self, resp)</dt><dd><span class="code">analyse&nbsp;response&nbsp;with&nbsp;unknown&nbsp;command&nbsp;inside</span></dd></dl>
+<dl><dt><a name="UsbATModem-checkResponse"><strong>checkResponse</strong></a>(self, resp)</dt><dd><span class="code">analyse&nbsp;response&nbsp;with&nbsp;unknown&nbsp;command&nbsp;inside</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-checkSIM"><strong>checkSIM</strong></a>(self, new_pin: str = None) -&gt; bool</dt></dl>
+<dl><dt><a name="UsbATModem-checkSIM"><strong>checkSIM</strong></a>(self, new_pin: str = None) -&gt; bool</dt></dl>
 
-<dl><dt><a name="QuectelModem-check_sms_mode"><strong>check_sms_mode</strong></a>(self) -&gt; int</dt></dl>
+<dl><dt><a name="UsbATModem-check_sms_mode"><strong>check_sms_mode</strong></a>(self) -&gt; int</dt></dl>
 
-<dl><dt><a name="QuectelModem-clearFPLMN"><strong>clearFPLMN</strong></a>(self)</dt><dd><span class="code">clearing&nbsp;forbidden&nbsp;PLMN&nbsp;list</span></dd></dl>
+<dl><dt><a name="UsbATModem-clearFPLMN"><strong>clearFPLMN</strong></a>(self)</dt><dd><span class="code">clearing&nbsp;forbidden&nbsp;PLMN&nbsp;list</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-close"><strong>close</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-close"><strong>close</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-closeAtLog"><strong>closeAtLog</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-configureSMS"><strong>configureSMS</strong></a>(self, character_set='GSM')</dt></dl>
 
-<dl><dt><a name="QuectelModem-configureSMS"><strong>configureSMS</strong></a>(self, character_set='GSM')</dt></dl>
+<dl><dt><a name="UsbATModem-decodePLMN"><strong>decodePLMN</strong></a>(self, plmnid)</dt></dl>
 
-<dl><dt><a name="QuectelModem-decodeNetworkInfo"><strong>decodeNetworkInfo</strong></a>(self, param)</dt></dl>
+<dl><dt><a name="UsbATModem-deleteSMS"><strong>deleteSMS</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-decodePLMN"><strong>decodePLMN</strong></a>(self, plmnid)</dt></dl>
-
-<dl><dt><a name="QuectelModem-decodeRegistration"><strong>decodeRegistration</strong></a>(self, param, log)</dt><dd><span class="code">Decode&nbsp;the&nbsp;registration&nbsp;message<br>
-Read&nbsp;all&nbsp;network&nbsp;attachment&nbsp;characteristics</span></dd></dl>
-
-<dl><dt><a name="QuectelModem-deleteSMS"><strong>deleteSMS</strong></a>(self)</dt></dl>
-
-<dl><dt><a name="QuectelModem-factoryDefault"><strong>factoryDefault</strong></a>(self)</dt></dl>
-
-<dl><dt><a name="QuectelModem-getGpsStatus"><strong>getGpsStatus</strong></a>(self) -&gt; dict</dt><dd><span class="code">Reads&nbsp;the&nbsp;full&nbsp;GPS&nbsp;status&nbsp;from&nbsp;the&nbsp;modem&nbsp;and&nbsp;returns&nbsp;all&nbsp;parameters&nbsp;in&nbsp;a&nbsp;dictionary<br>
+<dl><dt><a name="UsbATModem-getGpsStatus"><strong>getGpsStatus</strong></a>(self) -&gt; dict</dt><dd><span class="code">Reads&nbsp;the&nbsp;full&nbsp;GPS&nbsp;status&nbsp;from&nbsp;the&nbsp;modem&nbsp;and&nbsp;returns&nbsp;all&nbsp;parameters&nbsp;in&nbsp;a&nbsp;dictionary<br>
 :return:<br>
 :rtype:</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-gpsOff"><strong>gpsOff</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-gpsOff"><strong>gpsOff</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-gpsOn"><strong>gpsOn</strong></a>(self)</dt><dd><span class="code">Turn&nbsp;GPS&nbsp;on<br>
-:return:<br>
-:rtype:</span></dd></dl>
+<dl><dt><a name="UsbATModem-gpsOn"><strong>gpsOn</strong></a>(self)</dt><dd><span class="code">#&nbsp;turn&nbsp;GPS&nbsp;on&nbsp;with&nbsp;output&nbsp;on&nbsp;ttyUSB1&nbsp;as&nbsp;NMEA&nbsp;sentence</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-gpsPort"><strong>gpsPort</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-gpsPort"><strong>gpsPort</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-gpsStatus"><strong>gpsStatus</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-gpsStatus"><strong>gpsStatus</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-initialize"><strong>initialize</strong></a>(self)</dt><dd><span class="code">#&nbsp;perform&nbsp;initialisation&nbsp;of&nbsp;the&nbsp;modem&nbsp;parameters</span></dd></dl>
+<dl><dt><a name="UsbATModem-isRegistered"><strong>isRegistered</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-isRegistered"><strong>isRegistered</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-logModemStatus"><strong>logModemStatus</strong></a>(self, output=&lt;_io.TextIOWrapper name='&lt;stdout&gt;' mode='w' encoding='utf-8'&gt;)</dt></dl>
 
-<dl><dt><a name="QuectelModem-logATCommand"><strong>logATCommand</strong></a>(self, cmd)</dt></dl>
+<dl><dt><a name="UsbATModem-logNetworkStatus"><strong>logNetworkStatus</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-logModemStatus"><strong>logModemStatus</strong></a>(self, output=&lt;_io.TextIOWrapper name='&lt;stdout&gt;' mode='w' encoding='utf-8'&gt;)</dt></dl>
+<dl><dt><a name="UsbATModem-manufacturer"><strong>manufacturer</strong></a>(self) -&gt; str</dt></dl>
 
-<dl><dt><a name="QuectelModem-logNetworkStatus"><strong>logNetworkStatus</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-model"><strong>model</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-manufacturer"><strong>manufacturer</strong></a>(self) -&gt; str</dt></dl>
+<dl><dt><a name="UsbATModem-modemStatus"><strong>modemStatus</strong></a>(self, show_operators=False) -&gt; dict</dt></dl>
 
-<dl><dt><a name="QuectelModem-model"><strong>model</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-networkStatus"><strong>networkStatus</strong></a>(self, log=True)</dt></dl>
 
-<dl><dt><a name="QuectelModem-modemStatus"><strong>modemStatus</strong></a>(self, show_operators=False) -&gt; dict</dt></dl>
-
-<dl><dt><a name="QuectelModem-networkStatus"><strong>networkStatus</strong></a>(self, log=True)</dt></dl>
-
-<dl><dt><a name="QuectelModem-open"><strong>open</strong></a>(self)</dt></dl>
-
-<dl><dt><a name="QuectelModem-readATResponse"><strong>readATResponse</strong></a>(self, param: str, raiseException: bool) -&gt; list</dt><dd><span class="code">:param&nbsp;param:&nbsp;command&nbsp;string&nbsp;that&nbsp;was&nbsp;sent<br>
+<dl><dt><a name="UsbATModem-readATResponse"><strong>readATResponse</strong></a>(self, param: str, raiseException: bool) -&gt; list</dt><dd><span class="code">:param&nbsp;param:&nbsp;command&nbsp;string&nbsp;that&nbsp;was&nbsp;sent<br>
 :type&nbsp;param:&nbsp;str<br>
 :param&nbsp;raiseException:&nbsp;if&nbsp;True&nbsp;raise&nbsp;an&nbsp;exception&nbsp;if&nbsp;read&nbsp;or&nbsp;decoding&nbsp;error<br>
 :type&nbsp;raiseException:<br>
 :return:<br>
 :rtype:&nbsp;list&nbsp;of&nbsp;str</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-readOperatorNames"><strong>readOperatorNames</strong></a>(self, fileName)</dt></dl>
+<dl><dt><a name="UsbATModem-readOperatorNames"><strong>readOperatorNames</strong></a>(self, fileName)</dt></dl>
 
-<dl><dt><a name="QuectelModem-readSMS"><strong>readSMS</strong></a>(self, stat)</dt></dl>
+<dl><dt><a name="UsbATModem-readSMS"><strong>readSMS</strong></a>(self, stat)</dt></dl>
 
-<dl><dt><a name="QuectelModem-read_operators_names"><strong>read_operators_names</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-read_operators_names"><strong>read_operators_names</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-regStatus"><strong>regStatus</strong></a>(self)</dt></dl>
+<dl><dt><a name="UsbATModem-regStatus"><strong>regStatus</strong></a>(self)</dt></dl>
 
-<dl><dt><a name="QuectelModem-resetCard"><strong>resetCard</strong></a>(self)</dt><dd><span class="code">Performs&nbsp;a&nbsp;modem&nbsp;soft&nbsp;reset<br>
+<dl><dt><a name="UsbATModem-resetCard"><strong>resetCard</strong></a>(self)</dt><dd><span class="code">Performs&nbsp;a&nbsp;modem&nbsp;soft&nbsp;reset<br>
 Modem&nbsp;is&nbsp;becoming&nbsp;non-effective&nbsp;for&nbsp;10&nbsp;to&nbsp;20&nbsp;secinds&nbsp;after&nbsp;this&nbsp;call<br>
 :return:<br>
 :rtype:</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-saveOperatorNames"><strong>saveOperatorNames</strong></a>(self, filename)</dt></dl>
+<dl><dt><a name="UsbATModem-saveOperatorNames"><strong>saveOperatorNames</strong></a>(self, filename)</dt></dl>
 
-<dl><dt><a name="QuectelModem-selectOperator"><strong>selectOperator</strong></a>(self, operator, name_format='long', rat=None)</dt><dd><span class="code">select&nbsp;an&nbsp;operator&nbsp;=&gt;&nbsp;automatic&nbsp;if&nbsp;failed</span></dd></dl>
+<dl><dt><a name="UsbATModem-selectOperator"><strong>selectOperator</strong></a>(self, operator, name_format='long', rat=None)</dt><dd><span class="code">select&nbsp;an&nbsp;operator&nbsp;=&gt;&nbsp;automatic&nbsp;if&nbsp;failed</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-sendATcommand"><strong>sendATcommand</strong></a>(self, param: str = None, raiseException: bool = False) -&gt; list</dt></dl>
+<dl><dt><a name="UsbATModem-sendATcommand"><strong>sendATcommand</strong></a>(self, param: str = None, raiseException: bool = False) -&gt; list</dt></dl>
 
-<dl><dt><a name="QuectelModem-sendSMS"><strong>sendSMS</strong></a>(self, da, text)</dt><dd><span class="code">Send&nbsp;SMS&nbsp;in&nbsp;text&nbsp;mode<br>
+<dl><dt><a name="UsbATModem-sendSMS"><strong>sendSMS</strong></a>(self, da, text)</dt><dd><span class="code">Send&nbsp;SMS&nbsp;in&nbsp;text&nbsp;mode<br>
 :param&nbsp;da:&nbsp;destination&nbsp;MSISDN<br>
 :type&nbsp;da:&nbsp;str<br>
 :param&nbsp;text:<br>
@@ -255,29 +240,33 @@ Modem&nbsp;is&nbsp;becoming&nbsp;non-effective&nbsp;for&nbsp;10&nbsp;to&nbsp;20&
 :return:&nbsp;"OK"&nbsp;if&nbsp;no&nbsp;error<br>
 :rtype:&nbsp;str</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-setpin"><strong>setpin</strong></a>(self, pin)</dt></dl>
+<dl><dt><a name="UsbATModem-setpin"><strong>setpin</strong></a>(self, pin)</dt><dd><span class="code">Configure&nbsp;PIN&nbsp;number&nbsp;for&nbsp;modem<br>
+:param&nbsp;pin:<br>
+:type&nbsp;pin:<br>
+:return:<br>
+:rtype:</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-splitResponse"><strong>splitResponse</strong></a>(self, cmd, resp, raiseException=True)</dt><dd><span class="code">New&nbsp;version&nbsp;on&nbsp;08/04/2024&nbsp;to&nbsp;address&nbsp;the&nbsp;problem&nbsp;of&nbsp;comma&nbsp;between&nbsp;double&nbsp;quotes.<br>
+<dl><dt><a name="UsbATModem-splitResponse"><strong>splitResponse</strong></a>(self, cmd, resp, raiseException=True)</dt><dd><span class="code">New&nbsp;version&nbsp;on&nbsp;08/04/2024&nbsp;to&nbsp;address&nbsp;the&nbsp;problem&nbsp;of&nbsp;comma&nbsp;between&nbsp;double&nbsp;quotes.<br>
 :param&nbsp;cmd:&nbsp;The&nbsp;AT&nbsp;command&nbsp;sent<br>
 :param&nbsp;resp:&nbsp;The&nbsp;response&nbsp;sent&nbsp;back&nbsp;by&nbsp;the&nbsp;modem<br>
 :param&nbsp;raiseException:&nbsp;if&nbsp;True&nbsp;raise&nbsp;an&nbsp;exception&nbsp;in&nbsp;case&nbsp;of&nbsp;decoding&nbsp;error<br>
 :return:&nbsp;a&nbsp;list&nbsp;with&nbsp;all&nbsp;response&nbsp;fields</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-visibleOperators"><strong>visibleOperators</strong></a>(self) -&gt; list</dt><dd><span class="code">Retrieve&nbsp;and&nbsp;returns&nbsp;the&nbsp;list&nbsp;of&nbsp;visible&nbsp;operators<br>
+<dl><dt><a name="UsbATModem-visibleOperators"><strong>visibleOperators</strong></a>(self) -&gt; list</dt><dd><span class="code">Retrieve&nbsp;and&nbsp;returns&nbsp;the&nbsp;list&nbsp;of&nbsp;visible&nbsp;operators<br>
 :return:<br>
 :rtype:&nbsp;list&nbsp;of&nbsp;dict</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-writeATBuffer"><strong>writeATBuffer</strong></a>(self, buf: str)</dt><dd><span class="code">#&nbsp;low&nbsp;level&nbsp;I/O&nbsp;methods<br>
+<dl><dt><a name="UsbATModem-writeATBuffer"><strong>writeATBuffer</strong></a>(self, buf: str)</dt><dd><span class="code">#&nbsp;low&nbsp;level&nbsp;I/O&nbsp;methods<br>
 #&nbsp;send&nbsp;AT&nbsp;command&nbsp;and&nbsp;return&nbsp;the&nbsp;responses</span></dd></dl>
 
 <hr>
 Static methods defined here:<br>
-<dl><dt><a name="QuectelModem-checkModemPresence"><strong>checkModemPresence</strong></a>(opts, save_modem=True)</dt><dd><span class="code">Check&nbsp;the&nbsp;physical&nbsp;presence&nbsp;of&nbsp;the&nbsp;modem<br>
+<dl><dt><a name="UsbATModem-checkModemPresence"><strong>checkModemPresence</strong></a>(opts, manufacturer: str, save_modem=True)</dt><dd><span class="code">Check&nbsp;the&nbsp;physical&nbsp;presence&nbsp;of&nbsp;the&nbsp;modem<br>
 raise&nbsp;<a href="#ModemException">ModemException</a>&nbsp;when&nbsp;no&nbsp;modem&nbsp;is&nbsp;found<br>
 &nbsp;<br>
 when&nbsp;save_modem&nbsp;is&nbsp;true&nbsp;the&nbsp;modem_definition&nbsp;file&nbsp;is&nbsp;saved</span></dd></dl>
 
-<dl><dt><a name="QuectelModem-get_filepath"><strong>get_filepath</strong></a>(option_path: str = None) -&gt; str</dt><dd><span class="code">:param&nbsp;option_path:&nbsp;path&nbsp;for&nbsp;modem&nbsp;definition&nbsp;given&nbsp;in&nbsp;arguments<br>
+<dl><dt><a name="UsbATModem-get_filepath"><strong>get_filepath</strong></a>(option_path: str = None) -&gt; str</dt><dd><span class="code">:param&nbsp;option_path:&nbsp;path&nbsp;for&nbsp;modem&nbsp;definition&nbsp;given&nbsp;in&nbsp;arguments<br>
 :type&nbsp;option_path:<br>
 :return:&nbsp;path&nbsp;to&nbsp;be&nbsp;used<br>
 :rtype:&nbsp;str</span></dd></dl>

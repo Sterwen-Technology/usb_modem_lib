@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # -------------------------------------------------------------------------------
-# Name:        Quectel modem manager
+# Name:        USB AT modem manager
 # Purpose:
 #
 # Author:      Laurent Carré
@@ -123,7 +123,7 @@ def findUsbModem(mfg, verbose: bool = False):
 VisibleOperator = namedtuple("VisibleOperator", ["operator", "PLMN_ID", "access", "technology"])
 
 
-class QuectelModem:
+class UsbATModem:
 
     @staticmethod
     def get_filepath(option_path: str=None) -> str:
@@ -159,7 +159,7 @@ class QuectelModem:
         return env_path
 
     @staticmethod
-    def checkModemPresence(opts, save_modem=True):
+    def checkModemPresence(opts, manufacturer: str, save_modem=True):
         """
         Check the physical presence of the modem
         raise ModemException when no modem is found
@@ -168,12 +168,12 @@ class QuectelModem:
 
         """
         # print("User ID=", os.geteuid())
-        modem_def = findUsbModem('Quectel', opts.verbose)
+        modem_def = findUsbModem(manufacturer, opts.verbose)
         if save_modem:
             if modem_def.get('tty_list') is None:
                 modem_log.error("Incorrect Modem characteristic detection")
                 return
-            env_dir = QuectelModem.get_filepath(opts.dir)
+            env_dir = UsbATModem.get_filepath(opts.dir)
             modem_file = os.path.join(env_dir, "modem0.json")
             modem_save = {
                 'model': modem_def['model'],
@@ -219,7 +219,7 @@ class QuectelModem:
             raise
 
         self._tty = None
-        self.open()
+        self._open()
         self._logAT = log
         if self._logAT:
             tracefile = os.path.join(self._filepath, f"atcmd{self._if_num}.log")
@@ -242,14 +242,17 @@ class QuectelModem:
         self._lac = 0
         self._ci = 0
         self._sim_change_flag = False
+        self._manufacturer = "Unknown"
+        self._networkName = None
+        self._regPLMN = 0
 
         if init:
-            self.initialize()
+            self._initialize()
         self._operatorNames = None  # dictionary PLMN/Operator name
 
         return
 
-    def open(self):
+    def _open(self):
         try:
             self._tty = serial.Serial(self._ifname, timeout=10.0)
         except serial.SerialException as err:
@@ -260,9 +263,9 @@ class QuectelModem:
     def close(self):
         self._tty.close()
         if self._logAT:
-            self._logfp.flush()
+            self._closeAtLog()
 
-    def closeAtLog(self):
+    def _closeAtLog(self):
         if self._logAT:
             header = "*** End of session %s ****\n" % datetime.datetime.now().isoformat(' ')
             self._logfp.write(header)
@@ -270,7 +273,7 @@ class QuectelModem:
             self._logfp.close()
             self._logAT = False
 
-    def logATCommand(self, cmd):
+    def _logATCommand(self, cmd):
         if self._logAT:
             buf = datetime.datetime.now().strftime("%H:%M:%S.%f >")
             buf += cmd
@@ -299,7 +302,7 @@ class QuectelModem:
     def writeATBuffer(self, buf: str):
         # print buf
         if self._logAT:
-            self.logATCommand(buf)
+            self._logATCommand(buf)
 
         try:
             self._tty.write(buf.encode())
@@ -371,79 +374,15 @@ class QuectelModem:
     #
     # perform initialisation of the modem parameters
     #
-    def initialize(self):
+    def _initialize(self):
         self.sendATcommand("E0")  # remove echo
-        r = self.sendATcommand("I")
-        if r[0] != self.manufacturer():
-            # print "Wrong manufacturer:",r
-            raise ModemException("Wrong manufacturer:" + str(r))
-
-        self._model = r[1]
-        self._rev = r[2]
         r = self.sendATcommand("+GSN")  # return IMEI
         self._IMEI = int(r[0])
         self._checkSIM()
 
     def _checkSIM(self) -> bool:
         # check if SIM is present
-        modem_log.debug("Checking SIM status")
-        r = self.sendATcommand("+QSIMSTAT?")
-        sim_status_read = False
-        sim_flags = None
-        sim_lock = None
-        for resp in r:
-            cmd = self.checkResponse(resp)
-            if cmd == "+QSIMSTAT":
-                sim_flags = self.splitResponse("+QSIMSTAT", resp)
-            elif cmd == "+CPIN":
-                sim_lock = self.splitResponse("+CPIN", resp)
-                sim_status_read = True
-
-        # print("SIM FLAGS=",sim_flags)
-        if sim_flags is not None and sim_flags[1] == 1:
-            # there is a SIM inserted
-            modem_log.debug("SIM inserted locked %s" % sim_lock)
-            self._SIM = True
-            if not sim_status_read:
-                r = self.sendATcommand("+CPIN?")
-                sim_lock = self.splitResponse("+CPIN", r[0])
-            # print("SIM lock=",sim_lock[0])
-            if sim_lock is not None:
-                self._SIM_STATUS = sim_lock[0]
-                if sim_lock[0] == "READY":
-                    r = self.sendATcommand("+CIMI")
-                    self._IMSI = r[0]
-                    if self._stored_imsi != self._IMSI:
-                        modem_log.warning("SIM card has been changed)")
-                        self._sim_change_flag = True
-                        self._stored_imsi = self._IMSI
-                        self._store_def()
-                    r = self.sendATcommand("+QCCID")
-                    r = self.splitResponse("+QCCID", r[0])
-                    # on ICCID, the last byte shall be left out
-                    modem_log.debug(f"Read ICCID result{r[0]}")
-                    # discard the 2 low digits (CRC)
-                    # correction 2025-01-02 QCCID is a string with 2 supplémentary characters
-                    # but can also be an int depending on the SIM card
-                    # was corrected on the fly or the system on Swann
-                    # print(f"QICCD={r[0]} type {type(r[0])}")
-                    if type(r[0]) is int:
-                        qiccid_str = str(r[0])
-                    else:
-                        qiccid_str = r[0]
-                    if len(qiccid_str) > 18:
-                        self._ICCID = qiccid_str[:18]
-                    else:
-                        self._ICCID = qiccid_str
-                    # print(f"QCCID {r[0]} ICCID {self._ICCID}")
-                    # self._ICCID = int(r[0] // 100)
-                    # print("ICCID:",self._ICCID,"Type:",type(self._ICCID))
-                    # allow full notifications on registration change
-                    self.sendATcommand("+CREG=2")
-            return True
-        else:
-            self._SIM = False
-            return False
+        raise NotImplementedError
 
     def checkSIM(self, new_pin: str = None) -> bool:
         if self._SIM_STATUS != 'READY':
@@ -477,12 +416,17 @@ class QuectelModem:
         return self._model
 
     def manufacturer(self) -> str:
-        return "Quectel"
+        return self._manufacturer
 
-    def SIM_Ready(self):
+    def SIM_Ready(self) -> bool:
+        """
+        True if SIM is ready
+        :return:
+        :rtype: bool
+        """
         return self._SIM and self._SIM_STATUS == "READY"
 
-    def SIM_Present(self):
+    def SIM_Present(self) -> bool:
         return self._SIM
 
     def SIM_Status(self) -> str:
@@ -500,21 +444,29 @@ class QuectelModem:
         if self._SIM and self._SIM_STATUS == "READY":
             return self._IMSI
         else:
-            return None
+            return 0
 
     @property
-    def ICCID(self) -> int:
+    def ICCID(self) -> str:
         if self._SIM and self._SIM_STATUS == "READY":
             return self._ICCID
         else:
             return None
 
     def setpin(self, pin):
+        """
+        Configure PIN number for modem
+        :param pin:
+        :type pin:
+        :return:
+        :rtype:
+        """
         cmd = f"+CPIN={pin}"
         try:
             self.sendATcommand(cmd)
         except ModemException as err:
             modem_log.error("Modem set PIN :" + str(err))
+            raise
 
     #
     # allow roaming
@@ -631,12 +583,12 @@ class QuectelModem:
         if vresp is None:
             modem_log.error("No registration status returned (+CREG)")
             return False
-        return self.decodeRegistration(vresp, log)
+        return self._decodeRegistration(vresp, log)
 
     def regStatus(self):
         return self._networkReg
 
-    def decodeRegistration(self, param, log):
+    def _decodeRegistration(self, param, log):
         """
         Decode the registration message
         Read all network attachment characteristics
@@ -698,27 +650,9 @@ class QuectelModem:
         #
         #  get operator name
         #
-
-        resp = self.sendATcommand("+QSPN")
-        param = self.checkAndSplitResponse("+QSPN", resp)
-        if param is not None:
-            self._networkName = param[0]
-            self._regPLMN = param[4]
-        else:
-            self._networkName = "Unknown"
-            self._regPLMN = 0
-
-        self._isRegistered = True
-        #
-        # Get quality indicators
-        #
-        # print("Decoding network info")
-        resp = self.sendATcommand("+QNWINFO")
-        param = self.checkAndSplitResponse("+QNWINFO", resp)
-        if param is not None:
-            self.decodeNetworkInfo(param)
-        else:
-            modem_log.error("Error on network info")
+        try:
+            self._get_operator_name()
+        except ModemException:
             return True
 
         if log:
@@ -728,7 +662,10 @@ class QuectelModem:
             modem_log.info(logstr)
         return True
 
-    def decodeNetworkInfo(self, param):
+    def _get_operator_name(self):
+        raise NotImplementedError
+
+    def _decodeNetworkInfo(self, param):
 
         # param=self.splitResponse("+QNWINFO",resp)
         self._rat = param[0]
@@ -978,31 +915,15 @@ class QuectelModem:
         modem_log.info("Allow 20-30 sec for the modem to restart")
 
 
-    def factoryDefault(self):
-        modem_log.info("RESTORING FACTORY DEFAULT")
-        self.sendATcommand("+QPRTPARA=3")
-        time.sleep(1.0)
-        modem_log.info("RESETTING THE MODEM")
-        self.sendATcommand("+CFUN=1,1")
-        self.close()
-        modem_log.info("Allow 20-30 sec for the modem to restart")
 
     #
     # turn GPS on with output on ttyUSB1 as NMEA sentence
     #
     def gpsOn(self):
-        """
-        Turn GPS on
-        :return:
-        :rtype:
-        """
-        resp = self.sendATcommand("+QGPSCFG=\"outport\",\"usbnmea\"", True)
-        resp = self.sendATcommand("+QGPSCFG=\"autogps\",1", True)
-        resp = self.sendATcommand("+QGPS=1", True)
+       raise NotImplementedError
 
     def gpsOff(self):
-        resp = self.sendATcommand("+QGPSEND", True)
-        resp = self.sendATcommand("+QGPSCFG=\"autogps\",0", True)
+        raise NotImplementedError
 
     def getGpsStatus(self) -> dict:
         """
@@ -1010,68 +931,13 @@ class QuectelModem:
         :return:
         :rtype:
         """
-        status = {}
-        if not self.gpsStatus():
-            status['state'] = 'off'
-            return status
-        #
-        # now the GPS is on let's see what have
-        #
-        status['state'] = 'on'
-        # modem_log.debug("GPS is ON")
-        #
-        # check NMEA port
-        #
-        # modem_log.debug("Reading NMEA port parameters")
-        resp = self.sendATcommand("+QGPSCFG=\"outport\"")
-        param = self.checkAndSplitResponse("+QGPSCFG", resp)
-        status["NMEA_port1"] = param[0]
-        status['NMEA_port2'] = param[1]
-        # read values
-        # modem_log.debug("Reading GPS via AT")
-        resp = self.sendATcommand("+QGPSLOC=0", False)
-        # print("GPS RESP=",resp)
-        # check that we are fixed
-        cmd = self.checkResponse(resp[0])
-        if cmd.startswith('+CME'):
-            err = int(self.splitResponse("+CME ERROR", resp[0])[0])
-            # print("ERROR=",err)
-            if err == 516:
-                status['fix'] = False
-            else:
-                status['fix'] = err
-            return status
-        # now we shall have a valid GPS signal
-
-        param = self.checkAndSplitResponse("+QGPSLOC", resp)
-        if param is None:
-            status['fix'] = False
-        else:
-            status['fix'] = True
-            status["time_UTC"] = param[0]
-            status["latitude"] = param[1]
-            status['longitude'] = param[2]
-            status['hdop'] = param[3]
-            status['Altitude'] = param[4]
-            status['date'] = param[9]
-            status["nbsat"] = param[10]
-            status["SOG_KMH"] = param[8]
-        return status
+        raise NotImplementedError
 
     def gpsStatus(self):
-        resp = self.sendATcommand("+QGPS?")
-        param = self.checkAndSplitResponse("+QGPS", resp)
-        if param is None:
-            return False
-        if param[0] == 0:
-            return False
-        else:
-            return True
+        raise NotImplementedError
 
     def gpsPort(self):
-        resp = self.sendATcommand("+QGPSCFG=\"outport\"")
-        param = self.checkAndSplitResponse("+QGPSCFG", resp)
-        return param[1]
+        raise NotImplementedError
 
     '''
 
